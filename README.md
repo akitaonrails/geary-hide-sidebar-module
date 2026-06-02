@@ -63,6 +63,15 @@ make
 Produces `libgeary-hide-sidebar.so`. Needs the GTK3 dev headers
 (`pkg-config gtk+-3.0 gmodule-2.0`).
 
+## Test
+
+```sh
+make test           # builds and runs the unit tests
+```
+
+The tests need a GDK display, so `make test` runs them under `xvfb-run` when
+it's installed (and skips, exit 77, if no display is reachable).
+
 ## Run
 
 ```sh
@@ -156,7 +165,8 @@ and size policy.
 | File | Purpose |
 |---|---|
 | `geary-hide-sidebar.c` | The GTK module source |
-| `Makefile` | Build / run / debug / install targets |
+| `test_geary_hide_sidebar.c` | Unit tests (`make test`, headless via xvfb-run) |
+| `Makefile` | Build / run / debug / test / install targets |
 | `org.gnome.Geary.desktop` | Optional per-user launcher with the hack |
 | `compile_commands.json` | Lets your editor resolve GTK headers (generated) |
 | `README.md` | This file |

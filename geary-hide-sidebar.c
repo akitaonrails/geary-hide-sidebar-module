@@ -5,7 +5,8 @@
  *
  * Features
  * --------
- *   - A keybinding (default F9) toggles the sidebar in the focused window.
+ *   - A keybinding (default Ctrl+Shift+M) toggles the sidebar, regardless
+ *     of which widget has focus.
  *   - "auto" mode collapses the sidebar by default when the window is
  *     narrow OR sitting on a portrait (vertical) monitor, and expands it
  *     when the window is wide on a landscape monitor. Re-evaluated on
@@ -14,19 +15,14 @@
  * How it works
  * ------------
  * GTK loads any module named in the GTK_MODULES environment variable and
- * calls gtk_module_init() right after GTK starts. We then run inside
- * Geary's process. We install an emission hook on GtkWidget::map; when a
- * window whose GType name is "ApplicationMainWindow" (Geary's main window,
- * per <template class="..."> in ui/application-main-window.ui) is mapped,
- * we locate two widgets by the builder IDs Geary gives them:
- *
- *     folder_box        - the "Mail" column: app header + folder list
- *     folder_separator  - the thin divider to its right
- *
- * GtkBuilder copies each object's id into the widget name, so
- * gtk_widget_get_name() returns "folder_box" etc. Those two names plus the
- * window type are the ONLY coupling to Geary internals; if a future Geary
- * release renames them, edit the #defines below.
+ * calls gtk_module_init() right after GTK starts, so we run inside Geary's
+ * process. We install an emission hook on GtkWidget::map; when a window
+ * whose GType name is "ApplicationMainWindow" (Geary's main window, per
+ * <template class="..."> in ui/application-main-window.ui) is mapped, we
+ * locate the "Mail" column box and its separator by structure and hide
+ * them (see acquire_sidebar and the coupling notes by the #defines below).
+ * The window GType name and one CSS style class are the ONLY coupling to
+ * Geary internals.
  *
  * A global GTK key snooper handles the toggle accelerator (focus-proof),
  * and a per-window "configure-event" re-applies the auto policy on
@@ -76,14 +72,26 @@
 #define GEARY_MAIN_WINDOW_TYPE "ApplicationMainWindow"
 #define GEARY_FOLDER_STYLE_CLASS "geary-folder"
 
+/* ---- defaults (each overridable via the environment, see parse_config) ---- */
+#define DEFAULT_MIN_WIDTH    800                 /* absolute px floor */
+#define DEFAULT_WIDTH_RATIO  0.62                /* fraction of monitor width */
+#define DEFAULT_ACCEL        "<Control><Shift>m" /* toggle keybinding */
+
+/* A widget that has not yet been allocated a real size reports a width of
+ * 0 or 1px; treat anything this small as "no allocation yet" and fall back
+ * to another size source. */
+#define UNALLOCATED_WIDTH 1
+
+/* Key under which each main window stores its WinState (g_object_set_data). */
+#define WIN_STATE_KEY "ghs-window"
+
 /* ---- modes ---- */
 typedef enum { MODE_AUTO, MODE_ALWAYS, MODE_MANUAL } SidebarMode;
 
 /* ---- parsed configuration (read once at module init) ---- */
 static SidebarMode g_mode        = MODE_AUTO;
-static int         g_min_width   = 800;   /* absolute floor, px */
-static double      g_width_ratio = 0.62;  /* collapse below this fraction of
-                                           * the monitor's usable width */
+static int         g_min_width   = DEFAULT_MIN_WIDTH;
+static double      g_width_ratio = DEFAULT_WIDTH_RATIO;
 static guint       g_accel_key   = 0;     /* GDK keyval */
 static GdkModifierType g_accel_mods = 0;
 
@@ -121,6 +129,8 @@ static void dbg(const char *fmt, ...) {
 
 /* Depth-first search for a descendant carrying the given CSS style class. */
 static GtkWidget *find_by_style_class(GtkWidget *root, const char *cls) {
+    if (root == NULL)
+        return NULL;
     GtkStyleContext *ctx = gtk_widget_get_style_context(root);
     if (ctx != NULL && gtk_style_context_has_class(ctx, cls))
         return root;
@@ -179,28 +189,32 @@ static void acquire_sidebar(GtkWidget *top,
         *sep ? G_OBJECT_TYPE_NAME(*sep) : "(none)");
 }
 
+/* Show or hide one sidebar widget. HdyLeaflet manages child_visible
+ * separately from the widget's own visibility, so set both — otherwise an
+ * unfolded leaflet keeps allocating space to a hidden column. NULL-safe. */
+static void set_widget_collapsed(GtkWidget *w, gboolean visible) {
+    if (w == NULL)
+        return;
+    gtk_widget_set_visible(w, visible);
+    gtk_widget_set_child_visible(w, visible);
+}
+
 static void apply_state(WinState *st) {
     gboolean visible = !st->collapsed;
-    if (st->folder_box != NULL) {
-        gtk_widget_set_visible(st->folder_box, visible);
-        /* HdyLeaflet manages child_visible separately from the widget's
-         * own visibility; force it too so an unfolded leaflet can't keep
-         * allocating space to the hidden column. */
-        gtk_widget_set_child_visible(st->folder_box, visible);
-    }
-    if (st->folder_separator != NULL) {
-        gtk_widget_set_visible(st->folder_separator, visible);
-        gtk_widget_set_child_visible(st->folder_separator, visible);
-    }
-    if (st->folder_box != NULL)
-        gtk_widget_queue_resize(gtk_widget_get_parent(st->folder_box));
+    set_widget_collapsed(st->folder_box, visible);
+    set_widget_collapsed(st->folder_separator, visible);
 
-    if (st->folder_box != NULL)
+    if (st->folder_box != NULL) {
+        GtkWidget *parent = gtk_widget_get_parent(st->folder_box);
+        if (parent != NULL)
+            gtk_widget_queue_resize(parent);
+
         dbg("sidebar %s (box visible=%d is_visible=%d child_visible=%d)",
             st->collapsed ? "collapsed" : "expanded",
             gtk_widget_get_visible(st->folder_box),
             gtk_widget_is_visible(st->folder_box),
             gtk_widget_get_child_visible(st->folder_box));
+    }
 }
 
 /* Decide, from window size and the monitor it sits on, whether auto mode
@@ -212,9 +226,9 @@ static gboolean want_collapsed_auto(GtkWidget *top, int width_hint) {
     /* Prefer the size carried by a configure-event: the widget's allocation
      * is not yet updated when that event fires. */
     int width = width_hint;
-    if (width <= 1)
+    if (width <= UNALLOCATED_WIDTH)
         width = gtk_widget_get_allocated_width(top);
-    if (width <= 1)
+    if (width <= UNALLOCATED_WIDTH)
         gtk_window_get_size(GTK_WINDOW(top), &width, NULL);
 
     gboolean narrow_abs = (width > 0 && width < g_min_width);
@@ -303,7 +317,7 @@ static gint key_snooper(GtkWidget *grab_widget,
         g_strcmp0(G_OBJECT_TYPE_NAME(top), GEARY_MAIN_WINDOW_TYPE) != 0)
         return FALSE;
 
-    WinState *st = g_object_get_data(G_OBJECT(top), "ghs-window");
+    WinState *st = g_object_get_data(G_OBJECT(top), WIN_STATE_KEY);
     if (st == NULL)
         return FALSE;
 
@@ -325,7 +339,7 @@ static gint key_snooper(GtkWidget *grab_widget,
 
 /* One-time setup the first time we see Geary's main window. */
 static void setup_window(GtkWidget *top) {
-    if (g_object_get_data(G_OBJECT(top), "ghs-window") != NULL)
+    if (g_object_get_data(G_OBJECT(top), WIN_STATE_KEY) != NULL)
         return; /* already wired */
 
     WinState *st = g_new0(WinState, 1);
@@ -338,7 +352,7 @@ static void setup_window(GtkWidget *top) {
     }
 
     /* Free the state automatically when the window is destroyed. */
-    g_object_set_data_full(G_OBJECT(top), "ghs-window", st, g_free);
+    g_object_set_data_full(G_OBJECT(top), WIN_STATE_KEY, st, g_free);
 
     /* Prevent a later show_all() from revealing the column, and re-hide if
      * Geary explicitly shows it again. */
@@ -404,7 +418,7 @@ static void parse_config(void) {
 
     const char *key = g_getenv("GEARY_HIDE_SIDEBAR_KEY");
     if (key == NULL || *key == '\0')
-        key = "<Control><Shift>m";
+        key = DEFAULT_ACCEL;
     gtk_accelerator_parse(key, &g_accel_key, &g_accel_mods);
     if (g_accel_key != 0) {
         g_accel_key = gdk_keyval_to_lower(g_accel_key);
