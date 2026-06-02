@@ -9,6 +9,31 @@ or rebuilding Geary**, and without touching any file under `/usr`.
   **portrait (vertical) monitor**; expands when wide on a landscape
   monitor. Re-evaluated whenever you resize or drag between monitors.
 
+## Screenshots
+
+<table>
+<tr>
+<td width="50%" align="center">
+
+**Default Geary** — the left "Mail" column (account/folder list) takes up a
+big slice of a narrow window.
+
+<img src="docs/images/sidebar-shown.png" alt="Geary with the Mail sidebar shown" width="100%">
+
+</td>
+<td width="50%" align="center">
+
+**With the module** — the sidebar is collapsed, handing all the width to the
+message list and reading pane. Toggle back any time with **Ctrl+Shift+M**.
+
+<img src="docs/images/sidebar-hidden.png" alt="Geary with the Mail sidebar hidden" width="100%">
+
+</td>
+</tr>
+</table>
+
+> Email addresses in the screenshots are placeholders.
+
 Written against Geary `1:46.0` (Arch package), which links the system
 GTK3 + libhandy-1.
 
