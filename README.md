@@ -15,11 +15,14 @@ GTK3 + libhandy-1.
 ## Install on Arch (AUR)
 
 ```sh
-yay -S geary-hide-sidebar      # or: paru -S geary-hide-sidebar
+yay -S geary-hide-sidebar       # builds from source (x86_64 + aarch64)
+yay -S geary-hide-sidebar-bin   # prebuilt .so (x86_64 only)
 ```
 
-The package builds the module from source, depends on `geary`, and installs
-to `/usr/lib/geary-hide-sidebar/`. Its install scriptlet patches **both**
+Either package works the same once installed; pick `-bin` to skip the
+(sub-second) compile, or the source package on aarch64. They `provides`/
+`conflicts` each other, so pacman swaps cleanly between them. The package
+depends on `geary` and installs to `/usr/lib/geary-hide-sidebar/`. Its install scriptlet patches **both**
 Geary launch paths to load the module via `GTK_MODULES`:
 
 - the desktop entry `/usr/share/applications/org.gnome.Geary.desktop`, and
