@@ -84,6 +84,16 @@ A GTK module sidesteps that: GTK loads any library named in the
 after GTK starts — so we run *inside Geary's process* and manipulate the
 live widget tree directly.
 
+### Why not just send a PR upstream?
+
+We deliberately didn't open a pull request for this. The ability to
+hide/collapse the folder-list column has been requested upstream several
+times over the years, and those issues have gone unaddressed — which reads
+less like a backlog and more like a deliberate design stance that this
+isn't a direction the maintainers want Geary to take. Rather than push a
+change they've effectively already declined, this module gives the same
+result entirely on the user's side, without forking or modifying Geary.
+
 ## How it works
 
 1. On load we install an emission hook on `GtkWidget::map` and a global
