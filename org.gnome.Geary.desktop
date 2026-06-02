@@ -3,11 +3,14 @@ Version=1.0
 Type=Application
 Name=Geary (no Mail sidebar)
 Comment=Geary with the left folder-list column hidden via GTK_MODULES
-# NOTE: edit the absolute path below if you move/rename the module.
+# EDIT THIS: replace /ABSOLUTE/PATH/TO with where libgeary-hide-sidebar.so
+# actually lives (e.g. $HOME/geary-hide-sidebar-module, or
+# /usr/lib/geary-hide-sidebar if you installed the AUR package). The value
+# must be an absolute path — the desktop spec does not expand ~ or $HOME.
 # Optional tuning (see README): add before `geary`, e.g.
 #   GEARY_HIDE_SIDEBAR_MODE=auto GEARY_HIDE_SIDEBAR_MIN_WIDTH=1200 \
 #   GEARY_HIDE_SIDEBAR_KEY='<Control><Shift>m'
-Exec=env GTK_MODULES=/home/akitaonrails/Projects/geary-hide-sidebar-module/libgeary-hide-sidebar.so geary %U
+Exec=env GTK_MODULES=/ABSOLUTE/PATH/TO/libgeary-hide-sidebar.so geary %U
 Icon=org.gnome.Geary
 Terminal=false
 Categories=GNOME;GTK;Network;Email;
