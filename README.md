@@ -12,6 +12,37 @@ or rebuilding Geary**, and without touching any file under `/usr`.
 Written against Geary `1:46.0` (Arch package), which links the system
 GTK3 + libhandy-1.
 
+## Install on Arch (AUR)
+
+```sh
+yay -S geary-hide-sidebar      # or: paru -S geary-hide-sidebar
+```
+
+The package builds the module from source, depends on `geary`, and installs
+to `/usr/lib/geary-hide-sidebar/`. Its install scriptlet patches **both**
+Geary launch paths to load the module via `GTK_MODULES`:
+
+- the desktop entry `/usr/share/applications/org.gnome.Geary.desktop`, and
+- the D-Bus activation service `/usr/share/dbus-1/services/org.gnome.Geary.service`
+  — required because Geary is `DBusActivatable`, so GNOME often starts it
+  through D-Bus rather than the desktop `Exec=` line.
+
+A bundled pacman hook re-applies the patch after any future `geary` upgrade
+(which would otherwise restore the pristine launchers). Removing the package
+strips the injection back out, restoring Geary's launchers **byte-for-byte**:
+
+```sh
+yay -R geary-hide-sidebar      # Geary keeps working, unpatched
+```
+
+Restart any running Geary instance after install/removal. Tune behavior by
+editing the `GEARY_HIDE_SIDEBAR_*` env vars in the patched `Exec=` lines (see
+*Configuration* below).
+
+> Unlike the manual setup below (which touches nothing under `/usr`), the AUR
+> package edits Geary's system launcher files in place. The edit is idempotent
+> and exactly reversible, so uninstalling leaves Geary as it was.
+
 ## Why a GTK module instead of a Geary plugin?
 
 Geary's plugin API never exposes the main-window layout. The only
