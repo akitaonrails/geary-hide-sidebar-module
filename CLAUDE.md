@@ -76,16 +76,20 @@ Geary tries to show it again.
 
 ## Packaging & release (AUR)
 
-`packaging/aur/` holds two AUR packages:
-- **`geary-hide-sidebar`** (`PKGBUILD`) — builds from the GitHub tag archive.
-  Note the archive top-dir is `geary-hide-sidebar-module-$pkgver` because the
-  *repo* name differs from the *package* name.
+`packaging/aur/` holds two AUR packages. Each pairs with one Geary variant,
+because pacman has no "either/or" dependency and `geary-git` `conflicts=(geary)`
+without `provides=(geary)` — so a single OR-dependency is impossible:
+- **`geary-hide-sidebar`** (`PKGBUILD`) — builds from the GitHub tag archive;
+  `depends=('geary-git' …)`. Note the archive top-dir is
+  `geary-hide-sidebar-module-$pkgver` because the *repo* name differs from the
+  *package* name.
 - **`geary-hide-sidebar-bin`** (`PKGBUILD-bin`) — x86_64-only; downloads the
-  prebuilt `.so` tarball attached to the GitHub release. The `.so` is built on
-  ubuntu-22.04 (older glibc → forward-compatible on Arch) and links GTK3/glib2
-  by stable SONAME, so unversioned `depends=('geary' 'gtk3' 'glib2')` is
+  prebuilt `.so` tarball attached to the GitHub release; `depends=('geary' …)`
+  (stable). The `.so` is built on ubuntu-22.04 (older glibc → forward-compatible
+  on Arch) and links GTK3/glib2 by stable SONAME, so unversioned gtk3/glib2 is
   enough. The two packages `provides`/`conflicts` each other and install to
-  identical paths, sharing the same `.install` scriptlet and hook.
+  identical paths, sharing the same `.install` scriptlet and hook (the hook
+  triggers on both `geary` and `geary-git`).
 
 Both install the launcher-injection machinery, all driven by
 `packaging/aur/inject.sh`:

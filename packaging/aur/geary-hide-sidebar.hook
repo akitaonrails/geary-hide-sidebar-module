@@ -1,12 +1,15 @@
-# Re-inject the geary-hide-sidebar GTK module after any geary transaction.
+# Re-inject the geary-hide-sidebar GTK module after any Geary transaction.
 # A geary install/upgrade restores the pristine (unpatched) desktop entry and
 # D-Bus service, so we re-apply our GTK_MODULES prefix once the transaction
-# settles. `apply` is idempotent, so running it on every geary change is safe.
+# settles. `apply` is idempotent, so running it on every Geary change is safe.
+# Both Geary variants are listed (only one can be installed at a time, so the
+# absent one simply never matches) — covers the stable `geary` and `geary-git`.
 [Trigger]
 Operation = Install
 Operation = Upgrade
 Type = Package
 Target = geary
+Target = geary-git
 
 [Action]
 Description = Re-injecting geary-hide-sidebar into Geary's launchers...

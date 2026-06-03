@@ -39,16 +39,25 @@ GTK3 + libhandy-1.
 
 ## Install on Arch (AUR)
 
+**Pick the package that matches your Geary** — pacman has no "either/or"
+dependency, and `geary-git` conflicts with `geary` without providing it, so
+each module variant pairs with one Geary:
+
 ```sh
-yay -S geary-hide-sidebar       # builds from source (x86_64 + aarch64)
-yay -S geary-hide-sidebar-bin   # prebuilt .so (x86_64 only)
+yay -S geary-hide-sidebar       # source build; depends on geary-git
+yay -S geary-hide-sidebar-bin   # prebuilt .so (x86_64); depends on geary (stable)
 ```
 
-Either package works the same once installed; pick `-bin` to skip the
-(sub-second) compile, or the source package on aarch64. They `provides`/
-`conflicts` each other, so pacman swaps cleanly between them. The package
-depends on `geary` and installs to `/usr/lib/geary-hide-sidebar/`. Its install scriptlet patches **both**
-Geary launch paths to load the module via `GTK_MODULES`:
+- **`geary-hide-sidebar-bin`** → stable **`geary`**. Prebuilt, x86_64-only, no
+  compile.
+- **`geary-hide-sidebar`** → **`geary-git`** (the development branch, which also
+  ships native dark-mode email previews). Builds from source, so it's the
+  option for aarch64 too.
+
+The two module packages `provides`/`conflicts` each other (you can only run one
+Geary anyway). Both install to `/usr/lib/geary-hide-sidebar/`, and the install
+scriptlet patches **both** Geary launch paths to load the module via
+`GTK_MODULES`:
 
 - the desktop entry `/usr/share/applications/org.gnome.Geary.desktop`, and
 - the D-Bus activation service `/usr/share/dbus-1/services/org.gnome.Geary.service`

@@ -2,12 +2,14 @@
 
 pkgname=geary-hide-sidebar-bin
 _pkgname=geary-hide-sidebar
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="GTK3 module that hides/collapses Geary's left Mail sidebar (prebuilt binary)"
 arch=('x86_64')
 url="https://github.com/akitaonrails/geary-hide-sidebar-module"
 license=('MIT')
+# This prebuilt variant pairs with stable `geary` (the source package
+# geary-hide-sidebar pairs with geary-git instead — see its comment).
 # Unversioned gtk3/glib2 is sufficient: GTK3's SONAME (libgtk-3.so.0) is
 # frozen, so the prebuilt .so links against whatever gtk3 is installed.
 depends=('geary' 'gtk3' 'glib2')
