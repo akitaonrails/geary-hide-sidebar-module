@@ -64,9 +64,10 @@ scriptlet patches **both** Geary launch paths to load the module via
   — required because Geary is `DBusActivatable`, so GNOME often starts it
   through D-Bus rather than the desktop `Exec=` line.
 
-A bundled pacman hook re-applies the patch after any future `geary` upgrade
-(which would otherwise restore the pristine launchers). Removing the package
-strips the injection back out, restoring Geary's launchers **byte-for-byte**:
+A bundled pacman hook re-applies the patch after any future Geary upgrade —
+stable `geary` or `geary-git` — (which would otherwise restore the pristine
+launchers). Removing the package strips the injection back out, restoring
+Geary's launchers **byte-for-byte**:
 
 ```sh
 yay -R geary-hide-sidebar      # Geary keeps working, unpatched
@@ -79,6 +80,48 @@ editing the `GEARY_HIDE_SIDEBAR_*` env vars in the patched `Exec=` lines (see
 > Unlike the manual setup below (which touches nothing under `/usr`), the AUR
 > package edits Geary's system launcher files in place. The edit is idempotent
 > and exactly reversible, so uninstalling leaves Geary as it was.
+
+## Dark mode for email previews (geary-git)
+
+This is **not** part of this module — it's a built-in Geary feature, but only on
+`geary-git` (the development branch). It was added after the 46.0 release, so
+stable `geary 1:46.0` does **not** have it; it'll arrive in a future stable
+release. Since the source package already pairs with `geary-git`, you get it for
+free there.
+
+It's easy to miss because Geary doesn't label it "dark mode" — it's a color
+override that uses the bundled [Dark Reader](https://darkreader.org/) engine,
+tuned to Adwaita colors. To turn it on:
+
+1. Run your desktop in dark mode — Dark Reader only darkens when the app prefers
+   dark (`gsettings get org.gnome.desktop.interface color-scheme` →
+   `'prefer-dark'`).
+2. Enable the setting, either in **Preferences → "Override the original colors in
+   HTML emails"** (last toggle on the page), or on the command line:
+
+   ```sh
+   gsettings set org.gnome.Geary unset-html-colors true
+   ```
+
+3. **Fully restart Geary** (see the gotcha below).
+
+> **Gotcha — closing the window is not a restart.** With "Watch for new mail when
+> closed" enabled (the default), Geary keeps running as a background D-Bus
+> service, so the old process — and its old UI — stays alive after you close the
+> window or even after an upgrade. If a setting or a newly installed version
+> doesn't show up, the running process is stale. Force a real restart:
+>
+> ```sh
+> geary --quit         # ask the background service to exit
+> pkill -x geary       # only if it's still running
+> geary &              # relaunch
+> ```
+>
+> Tip: `readlink -f /proc/$(pgrep -x geary)/exe` ending in `(deleted)` means the
+> running binary was replaced on disk by an upgrade — a sure sign you're still on
+> the old process.
+
+To revert: `gsettings set org.gnome.Geary unset-html-colors false`, then restart.
 
 ## Why a GTK module instead of a Geary plugin?
 
