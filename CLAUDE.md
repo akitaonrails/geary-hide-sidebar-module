@@ -137,3 +137,16 @@ monitor's usable width, or < `MIN_WIDTH` px floor; re-evaluated on every
 overrides auto only within the current size class — crossing the collapse
 threshold (maximize ↔ half-tile) resumes auto. See README.md for the full env-var
 table and examples.
+
+## Composer dark-mode fix (a second, separate feature)
+
+Beyond hiding the sidebar, the module also patches a Geary dark-mode bug: Geary's
+`composer-web-view.css` hardcodes a white background on the focused editing area
+(`body > div:focus-within`), which is unreadable once the "Override the original
+colors in HTML emails" preference lightens the text. `ensure_composer_css()` (run
+from `gtk_module_init`, as the user, *before* Geary loads its stylesheet) appends a
+counter-rule to Geary's own per-user stylesheet `~/.config/geary/user-style.css`
+(or legacy `user-message.css` if that's the one Geary will read). It's
+marker-delimited (`COMPOSER_FIX_BEGIN`/`END`) and idempotent — never clobbers a
+user's CSS — and opt-out via `GEARY_HIDE_SIDEBAR_COMPOSER_FIX=0`. This reuses
+Geary's documented user-stylesheet hook, so no WebKit linking is needed.

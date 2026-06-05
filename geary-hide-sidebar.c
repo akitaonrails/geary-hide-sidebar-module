@@ -40,6 +40,8 @@
  *   GEARY_HIDE_SIDEBAR_MIN_WIDTH    absolute px floor      (default 800)
  *   GEARY_HIDE_SIDEBAR_KEY          GTK accelerator string
  *                                   (default "<Control><Shift>m")
+ *   GEARY_HIDE_SIDEBAR_COMPOSER_FIX 0/false/no to skip writing the composer
+ *                                   dark-mode CSS fix (default: on)
  *   GEARY_HIDE_SIDEBAR_DEBUG        1 to log to stderr
  *
  * A manual keypress overrides auto only within the current size class: your
@@ -57,6 +59,7 @@
 #include <gmodule.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* ---- coupling to Geary internals: keep these in sync with the .ui ----
  *
@@ -84,6 +87,21 @@
 
 /* Key under which each main window stores its WinState (g_object_set_data). */
 #define WIN_STATE_KEY "ghs-window"
+
+/* Composer dark-mode fix. Geary's composer-web-view.css hardcodes a white
+ * background on the focused editing area (`body > div:focus-within`), which
+ * becomes unreadable once the "Override the original colors in HTML emails"
+ * preference lightens the text (light-on-white). We append a counter-rule to
+ * Geary's own per-user stylesheet (~/.config/geary/user-style.css), which it
+ * loads into every webview — so the editing area follows the dark page
+ * background instead. Marker-delimited + idempotent so we never clobber a
+ * user's own CSS. Disable with GEARY_HIDE_SIDEBAR_COMPOSER_FIX=0. */
+#define COMPOSER_FIX_BEGIN \
+    "/* >>> geary-hide-sidebar composer dark-mode fix (auto-managed) >>> */"
+#define COMPOSER_FIX_END \
+    "/* <<< geary-hide-sidebar composer dark-mode fix <<< */"
+#define COMPOSER_FIX_RULE \
+    "body > div:focus-within { background-color: transparent !important; }"
 
 /* ---- modes ---- */
 typedef enum { MODE_AUTO, MODE_ALWAYS, MODE_MANUAL } SidebarMode;
@@ -429,6 +447,78 @@ static void parse_config(void) {
     }
 }
 
+/* ------------------------------------------- composer dark-mode fix */
+
+/* On by default; GEARY_HIDE_SIDEBAR_COMPOSER_FIX=0/false/no opts out. */
+static gboolean composer_fix_enabled(void) {
+    const char *v = g_getenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX");
+    return !(v != NULL && (g_strcmp0(v, "0") == 0 ||
+                           g_ascii_strcasecmp(v, "false") == 0 ||
+                           g_ascii_strcasecmp(v, "no") == 0));
+}
+
+/* Ensure our counter-rule is present in Geary's user stylesheet under
+ * `geary_dir` (normally ~/.config/geary). Runs at module init, before Geary
+ * reads the stylesheet, so the fix applies the same launch. Idempotent. */
+static void ensure_composer_css(const char *geary_dir) {
+    char *primary = g_build_filename(geary_dir, "user-style.css", NULL);
+    char *legacy  = g_build_filename(geary_dir, "user-message.css", NULL);
+
+    /* Geary loads user-style.css if it exists, else the legacy
+     * user-message.css. Edit whichever it will actually read, so creating a
+     * fresh user-style.css can't mask an existing legacy file. */
+    char *target;
+    if (g_file_test(primary, G_FILE_TEST_EXISTS))
+        target = g_strdup(primary);
+    else if (g_file_test(legacy, G_FILE_TEST_EXISTS))
+        target = g_strdup(legacy);
+    else
+        target = g_strdup(primary);
+    g_free(primary);
+    g_free(legacy);
+
+    char *existing = NULL;
+    gsize len = 0;
+    gboolean have = g_file_get_contents(target, &existing, &len, NULL);
+
+    if (have && existing != NULL && strstr(existing, COMPOSER_FIX_BEGIN)) {
+        dbg("composer fix already present in %s", target);
+        g_free(existing);
+        g_free(target);
+        return;
+    }
+
+    if (g_mkdir_with_parents(geary_dir, 0700) != 0) {
+        dbg("could not create %s; skipping composer fix", geary_dir);
+        g_free(existing);
+        g_free(target);
+        return;
+    }
+
+    /* Preserve any existing content, then append our marked block. */
+    GString *out = g_string_new(NULL);
+    if (have && existing != NULL && len > 0) {
+        g_string_append_len(out, existing, len);
+        if (existing[len - 1] != '\n')
+            g_string_append_c(out, '\n');
+    }
+    g_string_append(out, COMPOSER_FIX_BEGIN "\n");
+    g_string_append(out, COMPOSER_FIX_RULE "\n");
+    g_string_append(out, COMPOSER_FIX_END "\n");
+
+    GError *err = NULL;
+    if (g_file_set_contents(target, out->str, out->len, &err))
+        dbg("composer fix written to %s", target);
+    else
+        dbg("could not write composer fix to %s: %s",
+            target, err ? err->message : "?");
+    g_clear_error(&err);
+
+    g_string_free(out, TRUE);
+    g_free(existing);
+    g_free(target);
+}
+
 /* ------------------------------------------------------ module entry */
 
 G_MODULE_EXPORT void gtk_module_init(gint *argc, gchar ***argv) {
@@ -436,6 +526,16 @@ G_MODULE_EXPORT void gtk_module_init(gint *argc, gchar ***argv) {
     (void) argv;
 
     parse_config();
+
+    /* We run as the user during gtk_init(), before Geary loads its per-user
+     * stylesheet — so dropping the counter-rule in now fixes the composer the
+     * same launch. */
+    if (composer_fix_enabled()) {
+        char *geary_dir =
+            g_build_filename(g_get_user_config_dir(), "geary", NULL);
+        ensure_composer_css(geary_dir);
+        g_free(geary_dir);
+    }
 
     /* gtk_module_init() runs during gtk_init(), before any widget has been
      * created. A class's signals aren't registered until its class_init has

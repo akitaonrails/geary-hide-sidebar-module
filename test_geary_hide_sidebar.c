@@ -10,6 +10,7 @@
  *   make test
  */
 #include <gtk/gtk.h>
+#include <glib/gstdio.h>
 
 #include "geary-hide-sidebar.c"
 
@@ -347,6 +348,105 @@ static void test_on_configure_user_override(void) {
     gtk_widget_destroy(window);
 }
 
+/* ------------------------------------------ composer dark-mode fix */
+
+/* Count non-overlapping occurrences of `needle` in `hay`. */
+static int count_occurrences(const char *hay, const char *needle) {
+    int n = 0;
+    const char *p = hay;
+    while ((p = strstr(p, needle)) != NULL) { n++; p += strlen(needle); }
+    return n;
+}
+
+static char *read_file(const char *path) {
+    char *data = NULL;
+    g_file_get_contents(path, &data, NULL, NULL);
+    return data; /* NULL if absent */
+}
+
+static void test_composer_css_creates(void) {
+    char *dir = g_dir_make_tmp("ghs-css-XXXXXX", NULL);
+    g_assert_nonnull(dir);
+    ensure_composer_css(dir);
+
+    char *css = g_build_filename(dir, "user-style.css", NULL);
+    char *content = read_file(css);
+    g_assert_nonnull(content);
+    g_assert_nonnull(strstr(content, COMPOSER_FIX_BEGIN));
+    g_assert_nonnull(strstr(content, COMPOSER_FIX_RULE));
+    g_assert_nonnull(strstr(content, COMPOSER_FIX_END));
+
+    g_free(content); g_free(css);
+    /* cleanup */
+    char *c = g_build_filename(dir, "user-style.css", NULL);
+    g_remove(c); g_remove(dir); g_free(c); g_free(dir);
+}
+
+static void test_composer_css_idempotent(void) {
+    char *dir = g_dir_make_tmp("ghs-css-XXXXXX", NULL);
+    ensure_composer_css(dir);
+    ensure_composer_css(dir);   /* second call must not duplicate */
+
+    char *css = g_build_filename(dir, "user-style.css", NULL);
+    char *content = read_file(css);
+    g_assert_nonnull(content);
+    g_assert_cmpint(count_occurrences(content, COMPOSER_FIX_BEGIN), ==, 1);
+    g_assert_cmpint(count_occurrences(content, COMPOSER_FIX_RULE), ==, 1);
+
+    g_free(content); g_remove(css); g_remove(dir); g_free(css); g_free(dir);
+}
+
+static void test_composer_css_preserves_existing(void) {
+    char *dir = g_dir_make_tmp("ghs-css-XXXXXX", NULL);
+    char *css = g_build_filename(dir, "user-style.css", NULL);
+    const char *user = "/* my own */\nbody { font-size: 14px; }\n";
+    g_file_set_contents(css, user, -1, NULL);
+
+    ensure_composer_css(dir);
+
+    char *content = read_file(css);
+    g_assert_nonnull(content);
+    /* user's content survives, and our block is appended after it */
+    g_assert_nonnull(strstr(content, "font-size: 14px"));
+    g_assert_nonnull(strstr(content, COMPOSER_FIX_BEGIN));
+    g_assert_true(strstr(content, "font-size: 14px") <
+                  strstr(content, COMPOSER_FIX_BEGIN));
+
+    g_free(content); g_remove(css); g_remove(dir); g_free(css); g_free(dir);
+}
+
+static void test_composer_css_legacy(void) {
+    /* Only the legacy user-message.css exists: Geary would load that one, so
+     * we must edit it rather than create a masking user-style.css. */
+    char *dir = g_dir_make_tmp("ghs-css-XXXXXX", NULL);
+    char *legacy = g_build_filename(dir, "user-message.css", NULL);
+    g_file_set_contents(legacy, "/* legacy */\n", -1, NULL);
+
+    ensure_composer_css(dir);
+
+    char *primary = g_build_filename(dir, "user-style.css", NULL);
+    g_assert_false(g_file_test(primary, G_FILE_TEST_EXISTS)); /* not created */
+    char *content = read_file(legacy);
+    g_assert_nonnull(content);
+    g_assert_nonnull(strstr(content, "/* legacy */"));
+    g_assert_nonnull(strstr(content, COMPOSER_FIX_BEGIN));
+
+    g_free(content); g_remove(legacy); g_remove(dir);
+    g_free(legacy); g_free(primary); g_free(dir);
+}
+
+static void test_composer_fix_enabled(void) {
+    g_unsetenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX");
+    g_assert_true(composer_fix_enabled());               /* default on */
+    g_setenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX", "0", TRUE);
+    g_assert_false(composer_fix_enabled());
+    g_setenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX", "false", TRUE);
+    g_assert_false(composer_fix_enabled());
+    g_setenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX", "1", TRUE);
+    g_assert_true(composer_fix_enabled());
+    g_unsetenv("GEARY_HIDE_SIDEBAR_COMPOSER_FIX");
+}
+
 /* --------------------------------------------------------------- main */
 
 int main(int argc, char **argv) {
@@ -383,6 +483,13 @@ int main(int argc, char **argv) {
                     test_on_configure_respects_mode);
     g_test_add_func("/configure/user_override",
                     test_on_configure_user_override);
+
+    g_test_add_func("/composer/css_creates",   test_composer_css_creates);
+    g_test_add_func("/composer/css_idempotent", test_composer_css_idempotent);
+    g_test_add_func("/composer/css_preserves",
+                    test_composer_css_preserves_existing);
+    g_test_add_func("/composer/css_legacy",    test_composer_css_legacy);
+    g_test_add_func("/composer/fix_enabled",   test_composer_fix_enabled);
 
     return g_test_run();
 }

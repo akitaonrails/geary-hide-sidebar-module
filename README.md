@@ -123,6 +123,23 @@ tuned to Adwaita colors. To turn it on:
 
 To revert: `gsettings set org.gnome.Geary unset-html-colors false`, then restart.
 
+### The unreadable-composer fix (handled automatically)
+
+Geary has a dark-mode bug: when you compose a message, its `composer-web-view.css`
+hardcodes a **white** background on the focused editing area, so with dark mode on
+you get light text on white — almost unreadable. This module fixes it
+automatically: at launch it ensures a small counter-rule is present in Geary's own
+user stylesheet (`~/.config/geary/user-style.css`), which Geary loads into every
+webview. The write is marker-delimited and idempotent, so it never clobbers your
+own CSS; set `GEARY_HIDE_SIDEBAR_COMPOSER_FIX=0` to skip it.
+
+To apply it by hand instead (no module), drop this into
+`~/.config/geary/user-style.css` and restart Geary:
+
+```css
+body > div:focus-within { background-color: transparent !important; }
+```
+
 ## Why a GTK module instead of a Geary plugin?
 
 Geary's plugin API never exposes the main-window layout. The only
@@ -217,6 +234,7 @@ Press **Ctrl+Shift+M** to toggle the sidebar.
 | `GEARY_HIDE_SIDEBAR_WIDTH_RATIO` | `0.62` | `auto` collapses when the window covers less than this fraction of the monitor's usable width |
 | `GEARY_HIDE_SIDEBAR_MIN_WIDTH` | `800` | Absolute px floor; `auto` always collapses below this |
 | `GEARY_HIDE_SIDEBAR_KEY` | `<Control><Shift>m` | GTK accelerator, e.g. `<Control><Shift>m`, `<Control>backslash`, `F9` |
+| `GEARY_HIDE_SIDEBAR_COMPOSER_FIX` | _on_ | `0`/`false`/`no` to skip the composer dark-mode CSS fix (see [Dark mode](#dark-mode-for-email-previews-geary-git)) |
 | `GEARY_HIDE_SIDEBAR_DEBUG` | _unset_ | `1` to log decisions to stderr |
 
 **Modes**
